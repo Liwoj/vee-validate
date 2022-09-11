@@ -1,8 +1,7 @@
 import { computed, reactive, ref, Ref, unref, watch } from 'vue';
 import isEqual from 'fast-deep-equal/es6';
-import { FormContextKey } from './symbols';
-import { FieldMeta, FieldState, MaybeRef } from './types';
-import { getFromPath, injectWithSelf } from './utils';
+import { FieldMeta, FieldState, MaybeRef, PrivateFormContext } from './types';
+import { getFromPath } from './utils';
 
 export interface StateSetterInit<TValue = unknown> extends FieldState<TValue> {
   initialValue: TValue;
@@ -21,7 +20,7 @@ export interface FieldStateComposable<TValue = unknown> {
 
 export interface StateInit<TValue = unknown> {
   modelValue: MaybeRef<TValue>;
-  standalone: boolean;
+  form?: PrivateFormContext;
 }
 
 let ID_COUNTER = 0;
@@ -30,8 +29,8 @@ export function useFieldState<TValue = unknown>(
   path: MaybeRef<string>,
   init: Partial<StateInit<TValue>>
 ): FieldStateComposable<TValue> {
-  const { value, initialValue, setInitialValue } = _useFieldValue<TValue>(path, init.modelValue, !init.standalone);
-  const { errorMessage, errors, setErrors } = _useFieldErrors(path, !init.standalone);
+  const { value, initialValue, setInitialValue } = _useFieldValue<TValue>(path, init.modelValue, init.form);
+  const { errorMessage, errors, setErrors } = _useFieldErrors(path, init.form);
   const meta = _useFieldMeta(value, initialValue, errors);
   const id = ID_COUNTER >= Number.MAX_SAFE_INTEGER ? 0 : ++ID_COUNTER;
 
@@ -77,9 +76,8 @@ interface FieldValueComposable<TValue = unknown> {
 export function _useFieldValue<TValue = unknown>(
   path: MaybeRef<string>,
   modelValue?: MaybeRef<TValue>,
-  shouldInjectForm = true
+  form?: PrivateFormContext
 ): FieldValueComposable<TValue> {
-  const form = shouldInjectForm === true ? injectWithSelf(FormContextKey, undefined) : undefined;
   const modelRef = ref(unref(modelValue)) as Ref<TValue>;
 
   function resolveInitialValue() {
@@ -171,9 +169,7 @@ function _useFieldMeta<TValue>(
 /**
  * Creates the error message state for the field state
  */
-export function _useFieldErrors(path: MaybeRef<string>, shouldInjectForm: boolean) {
-  const form = shouldInjectForm ? injectWithSelf(FormContextKey, undefined) : undefined;
-
+export function _useFieldErrors(path: MaybeRef<string>, form?: PrivateFormContext) {
   function normalizeErrors(messages: string | string[] | null | undefined) {
     if (!messages) {
       return [];
